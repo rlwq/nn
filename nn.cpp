@@ -7,12 +7,17 @@ float sigmoidf(float x) {
 	return 1.0f / (1.0f + expf(-x));
 }
 
+float sigmoid_derf(float x) {
+	float q = (1.0f + expf(-x));
+	return expf(-x) / (q*q);
+}
+
 NeuralNetwork::NeuralNetwork (const std::initializer_list<size_t>& init) {
 	layers_size = init;
 	weights = std::vector<Matrix>(size() - 1);
 	biases = std::vector<Matrix>(size() - 1);
-	values = std::vector<Matrix>(size());
-
+	activations = std::vector<Matrix>(size());
+	predactivations = std::vector<Matrix>(size());
 	// random initialization
 	for (size_t i = 0; i < size() - 1; i++) {
 		weights[i] = randm(layer_size(i), layer_size(i+1), -3, 3);
@@ -35,15 +40,21 @@ Matrix NeuralNetwork::forward(const Matrix& input) {
 	assert(input.cols() == layer_size(0));
 
 	// loads the input
-	values[0] = input;
-	for (size_t i = 0; i < size() - 1; i++) {
-		values[i+1] = values[i] * weights[i] + biases[i];
-		FORALL(values[i+1], values[i+1].at(ROW, COL) = sigmoidf(values[i+1].at(ROW, COL)));
+	activations[0] = input;
+	//Todo: REMOVE THAT!!!!
+	predactivations[0] = Matrix(1, activations[0].cols(), 0);
+
+	for (size_t i = 1; i < size(); i++) {
+		predactivations[i] = activations[i-1] * weights[i-1] + biases[i-1];
+		//Todo: REMOVE THAT!!!!
+		activations[i] = predactivations[i];
+		FORALL(activations[i], activations[i].at(ROW, COL) = sigmoidf(predactivations[i].at(ROW, COL)));
 	}
-	return values[size()-1];
+
+	return activations[size()-1];
 }
 
-float NeuralNetwork::cost(const Matrix& input_batch, const Matrix& output_batch) {
+float NeuralNetwork::batch_cost(const Matrix& input_batch, const Matrix& output_batch) {
 	assert(input_batch.rows() == output_batch.rows());
 	assert(input_batch.cols() == layer_size(0));
 	assert(output_batch.cols() == layer_size(size()-1));
@@ -56,6 +67,17 @@ float NeuralNetwork::cost(const Matrix& input_batch, const Matrix& output_batch)
 		C += mag_sq(output_batch.get_row(i) + (-1) * forward(input_batch.get_row(i)));
 
 
+	return C / output_batch.rows();
+}
+
+float NeuralNetwork::cost(const Matrix& input, const Matrix& output) {
+	ASSERT_VECTOR(input); ASSERT_VECTOR(output);
+	assert(input.cols() == layer_size(0));
+	assert(output.cols() == layer_size(size()-1));
+
+	float C = 0;
+	// TODO: overwrite operator - for Matrix
+	C += mag_sq(output + (-1) * forward(input));
 	return C;
 }
 
@@ -66,7 +88,7 @@ void NeuralNetwork::finite_dist(const Matrix& input_batch,
 	std::vector<Matrix> new_weights = weights;
 	std::vector<Matrix> new_biases = biases;
 
-	float C = cost(input_batch, output_batch);
+	float C = batch_cost(input_batch, output_batch);
 
 	for (size_t i = 0; i < size() - 1; i++) {
 		Matrix &w = weights[i];
@@ -75,7 +97,7 @@ void NeuralNetwork::finite_dist(const Matrix& input_batch,
 				float cache = w.at(row, col);
 				w.at(row, col) += eps;
 
-				float C2 = cost(input_batch, output_batch);
+				float C2 = batch_cost(input_batch, output_batch);
 				float dC_dW = (C2 - C) / eps;
 				w.at(row, col) = cache;
 				new_weights[i].at(row, col) = cache - dC_dW * rate;
@@ -87,21 +109,59 @@ void NeuralNetwork::finite_dist(const Matrix& input_batch,
 			float cache = b.at(0, j);
 			b.at(0, j) += eps;
 
-			float C2 = cost(input_batch, output_batch);
+			float C2 = batch_cost(input_batch, output_batch);
 			float dC_db = (C2 - C) / eps;
 			b.at(0, j) = cache;
 			new_biases[i].at(0, j) = cache - dC_db * rate;
-		}
 
+		}
 	}
 	weights = new_weights;
 	biases = new_biases;
 }
 
+void NeuralNetwork::backward(const Matrix& input,
+														 const Matrix& output, float rate) {
+	ASSERT_VECTOR(input); ASSERT_VECTOR(output);
+	assert(input.cols() == layer_size(0));
+	assert(output.cols() == layer_size(size()-1));
+
+	forward(input);
+	// TODO: \/ make a better initialization for derivitives field
+	derivatives = activations;
+	derivatives[size()-1] = 2 * (activations[size()-1] - output);
+
+	for (size_t k_ = size()-2 + 1; k_ > 0; k_--) {
+		size_t k = k_ - 1; // Due to the fact that size_t is always non-negative
+		for (size_t i = 0; i < layer_size(k); i++) {
+			derivatives[k].at(0, i) = 0;
+
+			for (size_t j = 0; j < layer_size(k+1); j++) {
+				derivatives[k].at(0, i) +=
+					derivatives[k+1].at(0, j) *
+					weights[k].at(i, j) *
+					sigmoid_derf(predactivations[k].at(0, i));
+			}
+		}
+	}
+
+
+	// Updating weights
+	for (size_t k = 0; k < size()-1; k++)
+		FORALL(weights[k], weights[k].at(ROW, COL) -= rate * derivatives[k+1].at(0, COL)
+					 * activations[k].at(0, ROW));
+
+	// Updating biases
+	for (size_t k = 0; k < size()-1; k++)
+		FORALL(biases[k],
+					 biases[k].at(0, COL) -= rate * derivatives[k+1].at(0, COL)
+					 * sigmoid_derf(biases[k].at(0, COL)));
+}
+
 std::ostream& operator << (std::ostream& out, const NeuralNetwork& nn) {
 	for (size_t i = 0; i < nn.size(); i++) {
 		out << "--- Layer " << i << " ---" << std::endl;
-		out << nn.values[i] << std::endl;
+		out << nn.activations[i] << std::endl;
 	}
 	return out;
 }

@@ -34,13 +34,15 @@ public:
 	float& at(size_t r, size_t c);
 	const float& at(size_t r, size_t c) const;
 
-	Matrix& operator = (const Matrix& m);
-	Matrix& operator = (Matrix&& m);
+	Matrix& operator =  (const Matrix& m);
+	Matrix& operator =  (Matrix&& m);
 	Matrix& operator += (const Matrix& m);
-	Matrix operator + (const Matrix& m) const;
+	Matrix  operator +  (const Matrix& m) const;
+	Matrix& operator -= (const Matrix& m);
+	Matrix  operator -  (const Matrix& m) const;
 	Matrix& operator *= (float v);
-	Matrix operator * (float v) const;
-	Matrix operator * (const Matrix& m) const;
+	Matrix  operator *  (float v) const;
+	Matrix  operator *  (const Matrix& m) const;
 	~Matrix();
 };
 

@@ -1,5 +1,6 @@
 # To be done
 ## Road guide
-- [ ] Gradient descent implementation.
+- [x] Gradient descent implementation.
+- [ ] nn.cpp code refactoring.
 ## Minor improvements
 - [ ] Should inline some methods in `nn.h` and `matrix.h`.

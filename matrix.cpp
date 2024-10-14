@@ -96,10 +96,18 @@ float mag_sq(const Matrix& m) {
 }
 
 float&
-Matrix::at(size_t r, size_t c) { return es[r * cols() + c]; }
+Matrix::at(size_t r, size_t c) {
+	assert (r < _rows);
+	assert (c < _cols);
+	return es[r * cols() + c];
+}
 
 const float&
-Matrix::at(size_t r, size_t c) const { return es[r * cols() + c]; }
+Matrix::at(size_t r, size_t c) const {
+	assert (r < _rows);
+	assert (c < _cols);
+	return es[r * cols() + c];
+}
 
 
 Matrix& Matrix::operator = (const Matrix& m) {
@@ -135,6 +143,19 @@ Matrix Matrix::operator + (const Matrix& m) const {
 	assert (rows() == m.rows() && cols() == m.cols());
 	Matrix result(rows(), cols());
 	FORALL(result, result.at(ROW, COL) = at(ROW, COL) + m.at(ROW, COL));
+	return result;
+}
+
+Matrix& Matrix::operator -= (const Matrix& m) {
+	assert(rows() == m.rows() && cols() == m.cols());
+	FORALL(*this, this->at(ROW, COL) -= m.at(ROW, COL));
+	return *this;
+}
+
+Matrix Matrix::operator - (const Matrix& m) const {
+	assert (rows() == m.rows() && cols() == m.cols());
+	Matrix result(rows(), cols());
+	FORALL(result, result.at(ROW, COL) = at(ROW, COL) - m.at(ROW, COL));
 	return result;
 }
 
